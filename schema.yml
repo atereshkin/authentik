@@ -31486,7 +31486,7 @@ paths:
           - all
           - any
       - in: query
-        name: request_access
+        name: request_message_access
         schema:
           type: boolean
       - name: search
@@ -49906,8 +49906,8 @@ components:
       - authentik_sources_saml.groupsamlsourceconnection
       - authentik_sources_scim.scimsource
       - authentik_sources_scim.scimsourcepropertymapping
-      - authentik_sources_telegram.telegramsourcepropertymapping
       - authentik_sources_telegram.telegramsource
+      - authentik_sources_telegram.telegramsourcepropertymapping
       - authentik_sources_telegram.usertelegramsourceconnection
       - authentik_sources_telegram.grouptelegramsourceconnection
       - authentik_stages_authenticator_duo.authenticatorduostage
@@ -56828,14 +56828,12 @@ components:
           type: string
           minLength: 1
           description: Telegram bot username
-          maxLength: 255
         bot_token:
           type: string
           writeOnly: true
           minLength: 1
           description: Telegram bot token
-          maxLength: 255
-        request_access:
+        request_message_access:
           type: boolean
           description: Request access to send messages from your bot.
     PatchedTenantRequest:
@@ -61708,11 +61706,11 @@ components:
         bot_username:
           type: string
           description: Telegram bot username
-        request_access:
+        request_message_access:
           type: boolean
       required:
       - bot_username
-      - request_access
+      - request_message_access
     TelegramSource:
       type: object
       description: Source Serializer
@@ -61793,8 +61791,7 @@ components:
         bot_username:
           type: string
           description: Telegram bot username
-          maxLength: 255
-        request_access:
+        request_message_access:
           type: boolean
           description: Request access to send messages from your bot.
       required:
@@ -61925,14 +61922,12 @@ components:
           type: string
           minLength: 1
           description: Telegram bot username
-          maxLength: 255
         bot_token:
           type: string
           writeOnly: true
           minLength: 1
           description: Telegram bot token
-          maxLength: 255
-        request_access:
+        request_message_access:
           type: boolean
           description: Request access to send messages from your bot.
       required:
