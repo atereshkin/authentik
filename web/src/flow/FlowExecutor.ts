@@ -189,8 +189,6 @@ export class FlowExecutor
     @state()
     public flowInfo?: ContextualFlowInfo;
 
-    ws: WebsocketClient;
-
     //#endregion
 
     //#region Lifecycle
@@ -199,7 +197,8 @@ export class FlowExecutor
         configureSentry();
 
         super();
-        this.ws = new WebsocketClient();
+
+        WebsocketClient.connect();
 
         const inspector = new URL(window.location.toString()).searchParams.get("inspector");
 
@@ -228,6 +227,12 @@ export class FlowExecutor
                 this.submit({} as FlowChallengeResponseRequest);
             }
         });
+    }
+
+    public disconnectedCallback(): void {
+        super.disconnectedCallback();
+
+        WebsocketClient.close();
     }
 
     public async firstUpdated(): Promise<void> {
