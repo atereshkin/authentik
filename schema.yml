@@ -43187,6 +43187,11 @@ components:
           type: boolean
           description: Only send notification once, for example when sending a webhook
             into a chat channel.
+        hyperlink_base_url:
+          type: string
+          format: uri
+          nullable: true
+          maxLength: 200
       required:
       - mode_verbose
       - name
@@ -43231,6 +43236,12 @@ components:
           type: boolean
           description: Only send notification once, for example when sending a webhook
             into a chat channel.
+        hyperlink_base_url:
+          type: string
+          format: uri
+          nullable: true
+          minLength: 1
+          maxLength: 200
       required:
       - name
     NotificationTransportTest:
@@ -48905,6 +48916,12 @@ components:
           type: boolean
           description: Only send notification once, for example when sending a webhook
             into a chat channel.
+        hyperlink_base_url:
+          type: string
+          format: uri
+          nullable: true
+          minLength: 1
+          maxLength: 200
     PatchedNotificationWebhookMappingRequest:
       type: object
       description: NotificationWebhookMapping Serializer
