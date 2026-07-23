@@ -7,7 +7,6 @@ from django.contrib.messages import INFO, add_message
 from django.http.request import HttpRequest
 from structlog.stdlib import get_logger
 
-from authentik.events.models import Event, EventAction
 from authentik.flows.models import FlowStageBinding
 from authentik.policies.engine import PolicyEngine
 from authentik.policies.models import PolicyBinding
@@ -46,7 +45,10 @@ class ReevaluateMarker(StageMarker):
         http_request: HttpRequest,
     ) -> FlowStageBinding | None:
         """Re-evaluate policies bound to stage, and if they fail, remove from plan"""
-        from authentik.flows.planner import PLAN_CONTEXT_PENDING_USER
+        from authentik.flows.planner import (
+            PLAN_CONTEXT_PENDING_USER,
+            PLAN_CONTEXT_POLICY_EXCLUSIONS,
+        )
 
         LOGGER.debug(
             "f(plan_inst): running re-evaluation",
@@ -72,15 +74,13 @@ class ReevaluateMarker(StageMarker):
             binding=binding,
             messages=result.messages,
         )
-
-        from authentik.stages.user_login.models import UserLoginStage
-
-        if isinstance(binding.stage, UserLoginStage):
-            Event.new(
-                EventAction.LOGIN_BLOCKED,
-                message="; ".join(str(message) for message in result.messages)
-                or "Login blocked by policy.",
-                reasons=sorted(result.reasons),
-                subject=user if user.is_authenticated else None,
-            ).from_http(http_request, user)
+        # Record the exclusion so the executor can interpret the flow's outcome
+        # (e.g. emit login_blocked when an authentication flow ends without a login)
+        plan.context.setdefault(PLAN_CONTEXT_POLICY_EXCLUSIONS, []).append(
+            {
+                "stage": binding.stage.name,
+                "messages": [str(message) for message in result.messages],
+                "reasons": sorted(result.reasons),
+            }
+        )
         return None

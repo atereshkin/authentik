@@ -14,6 +14,7 @@ from rest_framework.exceptions import ParseError
 from authentik.brands.models import Brand
 from authentik.core.models import Group, User
 from authentik.core.tests.utils import RequestFactory, create_test_flow, create_test_user
+from authentik.events.models import Event, EventAction
 from authentik.flows.markers import ReevaluateMarker, StageMarker
 from authentik.flows.models import (
     FlowAuthenticationRequirement,
@@ -23,7 +24,7 @@ from authentik.flows.models import (
     FlowToken,
     InvalidResponseAction,
 )
-from authentik.flows.planner import FlowPlan, FlowPlanner
+from authentik.flows.planner import PLAN_CONTEXT_PENDING_USER, FlowPlan, FlowPlanner
 from authentik.flows.stage import PLAN_CONTEXT_PENDING_USER_IDENTIFIER, StageView
 from authentik.flows.tests import FlowTestCase
 from authentik.flows.views.executor import (
@@ -42,6 +43,7 @@ from authentik.stages.deny.models import DenyStage
 from authentik.stages.dummy.models import DummyStage
 from authentik.stages.identification.models import IdentificationStage, UserFields
 from authentik.stages.password.models import PasswordStage
+from authentik.stages.user_login.models import UserLoginStage
 
 POLICY_RETURN_FALSE = PropertyMock(return_value=PolicyResult(False, "foo"))
 POLICY_RETURN_TRUE = MagicMock(return_value=PolicyResult(True))
@@ -898,3 +900,145 @@ class TestFlowExecutor(FlowTestCase):
             component="ak-stage-access-denied",
             error_message="This link is invalid or has expired. Please request a new one.",
         )
+
+
+class TestFlowExecutorLoginBlocked(FlowTestCase):
+    """An authentication flow that completes with an identified pending user but no
+    session emits a login_blocked event carrying the recorded policy exclusions."""
+
+    BLOCKING_RESULT = PolicyResult(False, "too far", reasons={"impossible_travel"})
+
+    def setUp(self):
+        self.user = create_test_user()
+
+    def _login_binding(self, flow, order=0, re_evaluate=True):
+        return FlowStageBinding.objects.create(
+            target=flow,
+            stage=UserLoginStage.objects.create(name=generate_id()),
+            order=order,
+            re_evaluate_policies=re_evaluate,
+        )
+
+    def _seed_plan(self, flow, *bindings_markers, **context):
+        plan = FlowPlan(
+            flow_pk=flow.pk.hex,
+            bindings=[binding for binding, _ in bindings_markers],
+            markers=[marker for _, marker in bindings_markers],
+        )
+        plan.context.update(context)
+        self.set_flow_plan(plan)
+
+    def _execute(self, flow):
+        return self.client.get(
+            reverse("authentik_api:flow-executor", kwargs={"flow_slug": flow.slug})
+        )
+
+    def _blocked_events(self):
+        return Event.objects.filter(action=EventAction.LOGIN_BLOCKED)
+
+    @patch(
+        "authentik.policies.engine.PolicyEngine.result", PropertyMock(return_value=BLOCKING_RESULT)
+    )
+    def test_login_blocked_emitted(self):
+        """A login stage dropped by re-evaluation ends the flow without a session
+        and emits login_blocked with the pending user as subject."""
+        flow = create_test_flow(FlowDesignation.AUTHENTICATION)
+        binding = self._login_binding(flow)
+        self._seed_plan(
+            flow,
+            (binding, ReevaluateMarker(binding=binding)),
+            **{PLAN_CONTEXT_PENDING_USER: self.user},
+        )
+
+        self._execute(flow)
+
+        event = self._blocked_events().get()
+        self.assertEqual(event.context["subject"]["pk"], self.user.pk)
+        self.assertEqual(event.context["message"], "too far")
+        self.assertEqual(event.context["reasons"], ["impossible_travel"])
+        self.assertEqual(event.context["exclusions"][0]["stage"], binding.stage.name)
+        self.assertEqual(event.user["pk"], self.user.pk)
+
+    def test_message_falls_back_without_exclusions(self):
+        """An authentication flow whose plan never contained a login stage (excluded at
+        planning time, so nothing was recorded by a marker) still emits, with a generic
+        fallback message and no reasons."""
+        flow = create_test_flow(FlowDesignation.AUTHENTICATION)
+        self._seed_plan(flow, **{PLAN_CONTEXT_PENDING_USER: self.user})
+
+        self._execute(flow)
+
+        event = self._blocked_events().get()
+        self.assertEqual(event.context["message"], "Login blocked by policy.")
+        self.assertEqual(event.context["reasons"], [])
+        self.assertEqual(event.context["exclusions"], [])
+
+    @patch(
+        "authentik.policies.engine.PolicyEngine.result", PropertyMock(return_value=BLOCKING_RESULT)
+    )
+    def test_second_login_binding_still_logs_in(self):
+        """With two login bindings behind mutually exclusive policies (remember-me
+        pattern), dropping one while the other runs is a successful login, not a block."""
+        flow = create_test_flow(FlowDesignation.AUTHENTICATION)
+        excluded = self._login_binding(flow, order=0)
+        fallback = self._login_binding(flow, order=1, re_evaluate=False)
+        self._seed_plan(
+            flow,
+            (excluded, ReevaluateMarker(binding=excluded)),
+            (fallback, StageMarker()),
+            **{PLAN_CONTEXT_PENDING_USER: self.user},
+        )
+
+        self._execute(flow)
+
+        self.assertFalse(self._blocked_events().exists())
+
+    @patch(
+        "authentik.policies.engine.PolicyEngine.result", PropertyMock(return_value=BLOCKING_RESULT)
+    )
+    def test_not_emitted_for_non_authentication_flow(self):
+        """The same exclusion in a non-authentication flow emits nothing."""
+        flow = create_test_flow(FlowDesignation.ENROLLMENT)
+        binding = self._login_binding(flow)
+        self._seed_plan(
+            flow,
+            (binding, ReevaluateMarker(binding=binding)),
+            **{PLAN_CONTEXT_PENDING_USER: self.user},
+        )
+
+        self._execute(flow)
+
+        self.assertFalse(self._blocked_events().exists())
+
+    @patch(
+        "authentik.policies.engine.PolicyEngine.result", PropertyMock(return_value=BLOCKING_RESULT)
+    )
+    def test_not_emitted_without_pending_user(self):
+        """A block before identification (no pending user) emits nothing — there is
+        no identified victim to record or notify."""
+        flow = create_test_flow(FlowDesignation.AUTHENTICATION)
+        binding = self._login_binding(flow)
+        self._seed_plan(flow, (binding, ReevaluateMarker(binding=binding)))
+
+        self._execute(flow)
+
+        self.assertFalse(self._blocked_events().exists())
+
+    @patch(
+        "authentik.policies.engine.PolicyEngine.result", PropertyMock(return_value=BLOCKING_RESULT)
+    )
+    def test_not_emitted_for_authenticated_user(self):
+        """KNOWN LIMITATION: a blocked re-authentication is not detected, because the
+        user's pre-existing session makes them authenticated at flow completion."""
+        self.client.force_login(self.user)
+        flow = create_test_flow(FlowDesignation.AUTHENTICATION)
+        binding = self._login_binding(flow)
+        self._seed_plan(
+            flow,
+            (binding, ReevaluateMarker(binding=binding)),
+            **{PLAN_CONTEXT_PENDING_USER: self.user},
+        )
+
+        self._execute(flow)
+
+        self.assertFalse(self._blocked_events().exists())

@@ -323,7 +323,7 @@ class TestUserSecurityNotificationsDelivery(APITestCase):
         """A login blocked for impossible travel must email the affected user.
 
         The flow executor emitting this event is covered by
-        authentik/flows/tests/test_markers.py; this test starts from the event."""
+        authentik/flows/tests/test_executor.py; this test starts from the event."""
         user = create_test_user()
         self.enable_rule("default-notify-user-impossible-travel")
 

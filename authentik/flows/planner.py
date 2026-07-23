@@ -48,6 +48,10 @@ PLAN_CONTEXT_POST = "goauthentik.io/http/post"
 PLAN_CONTEXT_IS_RESTORED = "is_restored"
 PLAN_CONTEXT_IS_REDIRECTED = "is_redirected"
 PLAN_CONTEXT_REDIRECT_STAGE_TARGET = "redirect_stage_target"
+# List of bindings removed from the plan by a failed policy re-evaluation, appended to by
+# ReevaluateMarker. Each entry holds the stage name and the denying PolicyResult's
+# messages and reasons.
+PLAN_CONTEXT_POLICY_EXCLUSIONS = "policy_exclusions"
 CACHE_TIMEOUT = CONFIG.get_int("cache.timeout_flows")
 CACHE_PREFIX = "goauthentik.io/flows/planner/"
 

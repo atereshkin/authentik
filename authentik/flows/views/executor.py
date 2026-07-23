@@ -49,6 +49,7 @@ from authentik.flows.planner import (
     CACHE_PREFIX,
     PLAN_CONTEXT_IS_RESTORED,
     PLAN_CONTEXT_PENDING_USER,
+    PLAN_CONTEXT_POLICY_EXCLUSIONS,
     PLAN_CONTEXT_REDIRECT,
     FlowPlan,
     FlowPlanner,
@@ -390,8 +391,36 @@ class FlowExecutorView(APIView):
         kwargs.update({"flow_slug": self.flow.slug})
         return redirect_with_qs("authentik_api:flow-executor", self.request.GET, **kwargs)
 
+    def _check_login_blocked(self):
+        """An authentication flow that completes with an identified pending user but no
+        session means every login stage was removed or skipped — the login was blocked.
+        Emitted here (not in the removed stage) because a stage excluded by policy never
+        executes, and only the completed plan shows whether another login stage ran."""
+        if self.flow.designation != FlowDesignation.AUTHENTICATION:
+            return
+        pending_user = self.plan.context.get(PLAN_CONTEXT_PENDING_USER) if self.plan else None
+        if pending_user is None or not pending_user.is_authenticated:
+            return
+        # The DRF-wrapped `self.request` resolves and caches `.user` before any stage
+        # runs, so a login performed by a stage during this request is not reflected in
+        # it. The underlying request sees both: pre-existing sessions resolve lazily
+        # through the session, and `login()` assigns `.user` on it directly.
+        if self.request._request.user.is_authenticated:
+            return
+        exclusions = self.plan.context.get(PLAN_CONTEXT_POLICY_EXCLUSIONS, [])
+        messages = [message for exclusion in exclusions for message in exclusion["messages"]]
+        reasons = sorted({reason for exclusion in exclusions for reason in exclusion["reasons"]})
+        Event.new(
+            EventAction.LOGIN_BLOCKED,
+            message="; ".join(messages) or "Login blocked by policy.",
+            reasons=reasons,
+            exclusions=exclusions,
+            subject=pending_user,
+        ).from_http(self.request, pending_user)
+
     def _flow_done(self) -> HttpResponse:
         """User Successfully passed all stages"""
+        self._check_login_blocked()
         # Since this is wrapped by the ExecutorShell, the next argument is saved in the session
         # extract the next param before cancel as that cleans it
         if self.plan and PLAN_CONTEXT_REDIRECT in self.plan.context:

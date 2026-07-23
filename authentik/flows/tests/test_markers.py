@@ -6,19 +6,22 @@ from django.contrib.auth.models import AnonymousUser
 from django.test import TestCase
 
 from authentik.core.tests.utils import RequestFactory, create_test_flow, create_test_user
-from authentik.events.models import Event, EventAction
 from authentik.flows.markers import ReevaluateMarker
 from authentik.flows.models import FlowStageBinding
-from authentik.flows.planner import PLAN_CONTEXT_PENDING_USER, FlowPlan
+from authentik.flows.planner import (
+    PLAN_CONTEXT_PENDING_USER,
+    PLAN_CONTEXT_POLICY_EXCLUSIONS,
+    FlowPlan,
+)
 from authentik.lib.generators import generate_id
 from authentik.policies.types import PolicyResult
 from authentik.stages.dummy.models import DummyStage
-from authentik.stages.user_login.models import UserLoginStage
 
 
-class TestReevaluateMarkerLoginBlocked(TestCase):
-    """A user-login stage dropped by a failed policy re-evaluation emits a
-    login_blocked event; nothing else does."""
+class TestReevaluateMarkerExclusions(TestCase):
+    """A binding dropped by a failed policy re-evaluation is recorded in the plan
+    context so the executor can interpret the flow's outcome; passing re-evaluations
+    record nothing."""
 
     def setUp(self):
         self.request_factory = RequestFactory()
@@ -46,67 +49,49 @@ class TestReevaluateMarkerLoginBlocked(TestCase):
             engine.return_value.result = result
             return marker.process(plan, binding, request)
 
-    def _blocked_events(self):
-        return Event.objects.filter(action=EventAction.LOGIN_BLOCKED)
-
-    def test_login_blocked_emitted(self):
-        """A failed re-evaluation of a user-login stage emits one login_blocked event
-        carrying the pending user as subject, the denial reasons, and the message."""
-        binding = self._binding(UserLoginStage.objects.create(name=generate_id()))
+    def test_exclusion_recorded(self):
+        """A failed re-evaluation removes the binding and records the stage name,
+        the denial messages and the reasons in the plan context."""
+        stage = DummyStage.objects.create(name=generate_id())
+        binding = self._binding(stage)
         result = PolicyResult(False, "too far", reasons={"impossible_travel"})
         plan = self._plan(**{PLAN_CONTEXT_PENDING_USER: self.user})
 
         returned = self._process(binding, result, plan, self._request(self.user))
 
         self.assertIsNone(returned)
-        event = self._blocked_events().get()
-        self.assertEqual(event.context["subject"]["pk"], self.user.pk)
-        self.assertEqual(event.context["reasons"], ["impossible_travel"])
-        self.assertEqual(event.context["message"], "too far")
-        self.assertEqual(event.user["pk"], self.user.pk)
+        self.assertEqual(
+            plan.context[PLAN_CONTEXT_POLICY_EXCLUSIONS],
+            [
+                {
+                    "stage": stage.name,
+                    "messages": ["too far"],
+                    "reasons": ["impossible_travel"],
+                }
+            ],
+        )
 
-    def test_message_falls_back_when_policy_is_silent(self):
-        """A denial with no messages still emits, with a generic fallback message."""
-        binding = self._binding(UserLoginStage.objects.create(name=generate_id()))
-        result = PolicyResult(False, reasons={"forbidden_country"})
+    def test_exclusions_append(self):
+        """Multiple failed re-evaluations in one plan append, keeping earlier records."""
+        first = self._binding(DummyStage.objects.create(name=generate_id()))
+        second = self._binding(DummyStage.objects.create(name=generate_id()))
         plan = self._plan(**{PLAN_CONTEXT_PENDING_USER: self.user})
 
-        self._process(binding, result, plan, self._request(self.user))
+        self._process(first, PolicyResult(False, "one"), plan, self._request(self.user))
+        self._process(second, PolicyResult(False, "two"), plan, self._request(self.user))
 
-        event = self._blocked_events().get()
-        self.assertEqual(event.context["message"], "Login blocked by policy.")
-        self.assertEqual(event.context["reasons"], ["forbidden_country"])
+        exclusions = plan.context[PLAN_CONTEXT_POLICY_EXCLUSIONS]
+        self.assertEqual(
+            [exclusion["stage"] for exclusion in exclusions], [first.stage.name, second.stage.name]
+        )
+        self.assertEqual([exclusion["messages"] for exclusion in exclusions], [["one"], ["two"]])
 
-    def test_not_emitted_when_passing(self):
-        """A passing re-evaluation keeps the stage and emits nothing."""
-        binding = self._binding(UserLoginStage.objects.create(name=generate_id()))
+    def test_nothing_recorded_when_passing(self):
+        """A passing re-evaluation keeps the binding and records nothing."""
+        binding = self._binding(DummyStage.objects.create(name=generate_id()))
         plan = self._plan(**{PLAN_CONTEXT_PENDING_USER: self.user})
 
         returned = self._process(binding, PolicyResult(True), plan, self._request(self.user))
 
         self.assertEqual(returned, binding)
-        self.assertFalse(self._blocked_events().exists())
-
-    def test_not_emitted_for_non_login_stage(self):
-        """A failed re-evaluation of a non-login stage drops it but emits nothing."""
-        binding = self._binding(DummyStage.objects.create(name=generate_id()))
-        result = PolicyResult(False, "nope", reasons={"forbidden_country"})
-        plan = self._plan(**{PLAN_CONTEXT_PENDING_USER: self.user})
-
-        returned = self._process(binding, result, plan, self._request(self.user))
-
-        self.assertIsNone(returned)
-        self.assertFalse(self._blocked_events().exists())
-
-    def test_login_blocked_anonymous_no_subject(self):
-        """A block before identification (anonymous pending user) must not crash on
-        `user.uuid` and emits an event with no subject."""
-        binding = self._binding(UserLoginStage.objects.create(name=generate_id()))
-        result = PolicyResult(False, "nope", reasons={"forbidden_country"})
-        plan = self._plan()  # no pending user -> falls back to the anonymous request user
-
-        returned = self._process(binding, result, plan, self._request())
-
-        self.assertIsNone(returned)
-        event = self._blocked_events().get()
-        self.assertIsNone(event.context["subject"])
+        self.assertNotIn(PLAN_CONTEXT_POLICY_EXCLUSIONS, plan.context)
