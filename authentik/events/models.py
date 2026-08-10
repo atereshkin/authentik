@@ -1,8 +1,9 @@
 """authentik events models"""
 
-from collections.abc import Generator
+from collections.abc import Generator, Iterator
 from datetime import timedelta
 from difflib import get_close_matches
+from enum import nonmember
 from functools import lru_cache
 from inspect import currentframe
 from typing import Any
@@ -14,6 +15,7 @@ from django.db import models
 from django.db.models import Q
 from django.http import HttpRequest
 from django.http.request import QueryDict
+from django.utils.functional import classproperty
 from django.utils.timezone import now
 from django.utils.translation import gettext as _
 from requests import RequestException
@@ -87,66 +89,181 @@ class NotificationTransportError(SentryIgnoredException):
     """Error raised when a notification fails to be delivered"""
 
 
-class EventAction(models.TextChoices):
-    """All possible actions to save into the events log"""
+class EventActionType(models.TextChoices):
+    """Base class every group of event actions inherits from. Grouping is purely
+    presentational — the str values are the stable identifiers stored in the database
+    and used by API consumers, and do not change when actions are regrouped."""
 
-    LOGIN = "login"
-    LOGIN_FAILED = "login_failed"
-    LOGOUT = "logout"
+    @classproperty
+    def category(cls) -> str:
+        """Identifier of this group, used by the API"""
+        return cls.__name__.lower()
 
-    USER_WRITE = "user_write"
-    USER_OFFBOARDED = "user_offboarded"
-    SUSPICIOUS_REQUEST = "suspicious_request"
-    PASSWORD_SET = "password_set"  # noqa # nosec
+    @classproperty
+    def category_label(cls) -> str:
+        """Human-readable name of this group"""
+        return str(getattr(cls, "GROUP_LABEL", cls.__name__.capitalize()))
 
-    SECRET_VIEW = "secret_view"  # noqa # nosec
-    SECRET_ROTATE = "secret_rotate"  # noqa # nosec
 
-    INVITE_USED = "invitation_used"
+class EventActionMeta(type):
+    """Presents the nested EventActionType groups of a class as a single flat
+    Choices-like surface, so model fields, serializers and value lookups keep
+    working on flat values."""
 
-    AUTHORIZE_APPLICATION = "authorize_application"
-    SOURCE_LINKED = "source_linked"
+    def groups(cls) -> list[type[EventActionType]]:
+        """All action groups, in definition order"""
+        return [
+            value
+            for value in vars(cls).values()
+            if isinstance(value, type) and issubclass(value, EventActionType)
+        ]
 
-    IMPERSONATION_STARTED = "impersonation_started"
-    IMPERSONATION_ENDED = "impersonation_ended"
+    @property
+    def choices(cls) -> list[tuple[str, str]]:
+        return [choice for group in cls.groups() for choice in group.choices]
 
-    FLOW_EXECUTION = "flow_execution"
-    POLICY_EXECUTION = "policy_execution"
-    POLICY_EXCEPTION = "policy_exception"
-    PROPERTY_MAPPING_EXCEPTION = "property_mapping_exception"
+    @property
+    def values(cls) -> list[str]:
+        return [value for group in cls.groups() for value in group.values]
 
-    SYSTEM_TASK_EXECUTION = "system_task_execution"
-    SYSTEM_TASK_EXCEPTION = "system_task_exception"
-    SYSTEM_EXCEPTION = "system_exception"
+    def __iter__(cls) -> Iterator[EventActionType]:
+        for group in cls.groups():
+            yield from group
 
-    CONFIGURATION_ERROR = "configuration_error"
-    CONFIGURATION_WARNING = "configuration_warning"
+    def __contains__(cls, item: object) -> bool:
+        return any(item in group for group in cls.groups())
 
-    MODEL_CREATED = "model_created"
-    MODEL_UPDATED = "model_updated"
-    MODEL_DELETED = "model_deleted"
-    EMAIL_SENT = "email_sent"
+    def __instancecheck__(cls, instance: object) -> bool:
+        return isinstance(instance, EventActionType)
 
-    UPDATE_AVAILABLE = "update_available"
+    def __call__(cls, value: str) -> EventActionType:
+        """Look up an action by value across all groups, like a plain enum"""
+        for group in cls.groups():
+            try:
+                return group(value)
+            except ValueError:
+                continue
+        raise ValueError(f"'{value}' is not a valid {cls.__name__}")
 
-    EXPORT_READY = "export_ready"
 
-    REVIEW_INITIATED = "review_initiated"
-    REVIEW_OVERDUE = "review_overdue"
-    REVIEW_ATTESTED = "review_attested"
-    REVIEW_COMPLETED = "review_completed"
+class EventAction(metaclass=EventActionMeta):
+    """All possible actions to save into the events log, grouped by category"""
 
-    ACCESS_REQUEST_CREATED = "access_request_created"
-    ACCESS_REQUEST_APPROVED = "access_request_approved"
-    ACCESS_REQUEST_DENIED = "access_request_denied"
-    ACCESS_REQUEST_REVOKED = "access_request_revoked"
+    class AUTHENTICATION(EventActionType):
+        LOGIN = "login"
+        LOGIN_FAILED = "login_failed"
+        LOGOUT = "logout"
+        AUTHORIZE_APPLICATION = "authorize_application"
+        SOURCE_LINKED = "source_linked"
 
-    CUSTOM_PREFIX = "custom_"
+    class USER(EventActionType):
+        WRITE = "user_write"
+        OFFBOARDED = "user_offboarded"
+        PASSWORD_SET = "password_set"  # noqa # nosec
+        INVITATION_USED = "invitation_used"
+
+    class SECURITY(EventActionType):
+        SUSPICIOUS_REQUEST = "suspicious_request"
+        SECRET_VIEW = "secret_view"  # noqa # nosec
+        SECRET_ROTATE = "secret_rotate"  # noqa # nosec
+        IMPERSONATION_STARTED = "impersonation_started"
+        IMPERSONATION_ENDED = "impersonation_ended"
+
+    class FLOWS(EventActionType):
+        GROUP_LABEL = nonmember("Flows & policies")
+
+        FLOW_EXECUTION = "flow_execution"
+        POLICY_EXECUTION = "policy_execution"
+        POLICY_EXCEPTION = "policy_exception"
+        PROPERTY_MAPPING_EXCEPTION = "property_mapping_exception"
+
+    class SYSTEM(EventActionType):
+        TASK_EXECUTION = "system_task_execution"
+        TASK_EXCEPTION = "system_task_exception"
+        EXCEPTION = "system_exception"
+        CONFIGURATION_ERROR = "configuration_error"
+        CONFIGURATION_WARNING = "configuration_warning"
+        UPDATE_AVAILABLE = "update_available"
+        EMAIL_SENT = "email_sent"
+
+    class DATA(EventActionType):
+        MODEL_CREATED = "model_created"
+        MODEL_UPDATED = "model_updated"
+        MODEL_DELETED = "model_deleted"
+        EXPORT_READY = "export_ready"
+
+    class GOVERNANCE(EventActionType):
+        REVIEW_INITIATED = "review_initiated"
+        REVIEW_OVERDUE = "review_overdue"
+        REVIEW_ATTESTED = "review_attested"
+        REVIEW_COMPLETED = "review_completed"
+        ACCESS_REQUEST_CREATED = "access_request_created"
+        ACCESS_REQUEST_APPROVED = "access_request_approved"
+        ACCESS_REQUEST_DENIED = "access_request_denied"
+        ACCESS_REQUEST_REVOKED = "access_request_revoked"
+
+    class CUSTOM(EventActionType):
+        PREFIX = "custom_"
+
+    # Flat aliases for backwards compatibility — remove once all references
+    # use the grouped form (EventAction.USER.WRITE)
+    LOGIN = AUTHENTICATION.LOGIN
+    LOGIN_FAILED = AUTHENTICATION.LOGIN_FAILED
+    LOGOUT = AUTHENTICATION.LOGOUT
+    AUTHORIZE_APPLICATION = AUTHENTICATION.AUTHORIZE_APPLICATION
+    SOURCE_LINKED = AUTHENTICATION.SOURCE_LINKED
+    USER_WRITE = USER.WRITE
+    USER_OFFBOARDED = USER.OFFBOARDED
+    PASSWORD_SET = USER.PASSWORD_SET
+    INVITE_USED = USER.INVITATION_USED
+    SUSPICIOUS_REQUEST = SECURITY.SUSPICIOUS_REQUEST
+    SECRET_VIEW = SECURITY.SECRET_VIEW
+    SECRET_ROTATE = SECURITY.SECRET_ROTATE
+    IMPERSONATION_STARTED = SECURITY.IMPERSONATION_STARTED
+    IMPERSONATION_ENDED = SECURITY.IMPERSONATION_ENDED
+    FLOW_EXECUTION = FLOWS.FLOW_EXECUTION
+    POLICY_EXECUTION = FLOWS.POLICY_EXECUTION
+    POLICY_EXCEPTION = FLOWS.POLICY_EXCEPTION
+    PROPERTY_MAPPING_EXCEPTION = FLOWS.PROPERTY_MAPPING_EXCEPTION
+    SYSTEM_TASK_EXECUTION = SYSTEM.TASK_EXECUTION
+    SYSTEM_TASK_EXCEPTION = SYSTEM.TASK_EXCEPTION
+    SYSTEM_EXCEPTION = SYSTEM.EXCEPTION
+    CONFIGURATION_ERROR = SYSTEM.CONFIGURATION_ERROR
+    CONFIGURATION_WARNING = SYSTEM.CONFIGURATION_WARNING
+    UPDATE_AVAILABLE = SYSTEM.UPDATE_AVAILABLE
+    EMAIL_SENT = SYSTEM.EMAIL_SENT
+    MODEL_CREATED = DATA.MODEL_CREATED
+    MODEL_UPDATED = DATA.MODEL_UPDATED
+    MODEL_DELETED = DATA.MODEL_DELETED
+    EXPORT_READY = DATA.EXPORT_READY
+    REVIEW_INITIATED = GOVERNANCE.REVIEW_INITIATED
+    REVIEW_OVERDUE = GOVERNANCE.REVIEW_OVERDUE
+    REVIEW_ATTESTED = GOVERNANCE.REVIEW_ATTESTED
+    REVIEW_COMPLETED = GOVERNANCE.REVIEW_COMPLETED
+    ACCESS_REQUEST_CREATED = GOVERNANCE.ACCESS_REQUEST_CREATED
+    ACCESS_REQUEST_APPROVED = GOVERNANCE.ACCESS_REQUEST_APPROVED
+    ACCESS_REQUEST_DENIED = GOVERNANCE.ACCESS_REQUEST_DENIED
+    ACCESS_REQUEST_REVOKED = GOVERNANCE.ACCESS_REQUEST_REVOKED
+    CUSTOM_PREFIX = CUSTOM.PREFIX
+
+
+def event_action_group(action: str) -> type[EventActionType]:
+    """Group of `action`; actions not declared on EventAction (`custom_`-prefixed
+    actions created at runtime) fall into the custom group."""
+    try:
+        return type(EventAction(action))
+    except ValueError:
+        return EventAction.CUSTOM
 
 
 def event_actions():
     # Wrapper used in models to prevent migrations constantly changing when actions are added
     return EventAction.choices
+
+
+def event_action_categories():
+    # Wrapper so drf-spectacular's ENUM_NAME_OVERRIDES can resolve the category choices
+    return [(group.category, group.category_label) for group in EventAction.groups()]
 
 
 class Event(SerializerModel, ExpiringModel):
@@ -172,12 +289,12 @@ class Event(SerializerModel, ExpiringModel):
 
     @staticmethod
     def new(
-        action: str | EventAction,
+        action: str | EventActionType,
         app: str | None = None,
         **kwargs,
     ) -> Event:
         """Create new Event instance from arguments. Instance is NOT saved."""
-        if not isinstance(action, EventAction):
+        if not isinstance(action, EventActionType):
             action = EventAction.CUSTOM_PREFIX + action
         if not app:
             current = currentframe()

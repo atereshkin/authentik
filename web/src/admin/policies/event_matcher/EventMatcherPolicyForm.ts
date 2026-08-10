@@ -5,16 +5,17 @@ import "#elements/forms/SearchSelect/index";
 
 import { aki } from "#common/api/client";
 import { docLink } from "#common/global";
+import { groupBy } from "#common/utils";
 
 import { BasePolicyForm } from "#admin/policies/BasePolicyForm";
 
 import {
     AdminApi,
     App,
+    EventActionChoice,
     EventMatcherPolicy,
     EventsApi,
     PoliciesApi,
-    TypeCreate,
 } from "@goauthentik/api";
 
 import { msg } from "@lit/localize";
@@ -95,22 +96,28 @@ export class EventMatcherPolicyForm extends BasePolicyForm<EventMatcherPolicy> {
                     </ak-form-element-horizontal>
                     <ak-form-element-horizontal label=${msg("Action")} name="action">
                         <ak-search-select
-                            .fetchObjects=${async (query?: string): Promise<TypeCreate[]> => {
+                            .fetchObjects=${async (
+                                query?: string,
+                            ): Promise<EventActionChoice[]> => {
                                 const items = await aki(EventsApi).eventsEventsActionsList();
-                                return items.filter((item) =>
-                                    query
-                                        ? item.name.toLowerCase().includes(query.toLowerCase())
-                                        : true,
+                                if (!query) return items;
+                                const needle = query.toLowerCase();
+                                return items.filter(
+                                    (item) =>
+                                        item.label.toLowerCase().includes(needle) ||
+                                        item.categoryLabel.toLowerCase().includes(needle),
                                 );
                             }}
-                            .renderElement=${(item: TypeCreate): string => {
-                                return item.name;
+                            .groupBy=${(items: EventActionChoice[]) =>
+                                groupBy(items, (item) => item.categoryLabel)}
+                            .renderElement=${(item: EventActionChoice): string => {
+                                return item.label;
                             }}
-                            .value=${(item: TypeCreate | undefined): string | undefined => {
-                                return item?.component;
+                            .value=${(item: EventActionChoice | undefined): string | undefined => {
+                                return item?.value;
                             }}
-                            .selected=${(item: TypeCreate): boolean => {
-                                return this.instance?.action === item.component;
+                            .selected=${(item: EventActionChoice): boolean => {
+                                return this.instance?.action === item.value;
                             }}
                             blankable
                         >

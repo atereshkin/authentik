@@ -177,6 +177,8 @@ export * from "./EnrollmentTokenRequest";
 export * from "./ErrorDetail";
 export * from "./ErrorReportingConfig";
 export * from "./Event";
+export * from "./EventActionCategories";
+export * from "./EventActionChoice";
 export * from "./EventActions";
 export * from "./EventMatcherPolicy";
 export * from "./EventMatcherPolicyRequest";

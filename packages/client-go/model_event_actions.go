@@ -24,15 +24,15 @@ const (
 	EVENTACTIONS_LOGIN                      EventActions = "login"
 	EVENTACTIONS_LOGIN_FAILED               EventActions = "login_failed"
 	EVENTACTIONS_LOGOUT                     EventActions = "logout"
-	EVENTACTIONS_USER_WRITE                 EventActions = "user_write"
-	EVENTACTIONS_USER_OFFBOARDED            EventActions = "user_offboarded"
-	EVENTACTIONS_SUSPICIOUS_REQUEST         EventActions = "suspicious_request"
-	EVENTACTIONS_PASSWORD_SET               EventActions = "password_set"
-	EVENTACTIONS_SECRET_VIEW                EventActions = "secret_view"
-	EVENTACTIONS_SECRET_ROTATE              EventActions = "secret_rotate"
-	EVENTACTIONS_INVITATION_USED            EventActions = "invitation_used"
 	EVENTACTIONS_AUTHORIZE_APPLICATION      EventActions = "authorize_application"
 	EVENTACTIONS_SOURCE_LINKED              EventActions = "source_linked"
+	EVENTACTIONS_USER_WRITE                 EventActions = "user_write"
+	EVENTACTIONS_USER_OFFBOARDED            EventActions = "user_offboarded"
+	EVENTACTIONS_PASSWORD_SET               EventActions = "password_set"
+	EVENTACTIONS_INVITATION_USED            EventActions = "invitation_used"
+	EVENTACTIONS_SUSPICIOUS_REQUEST         EventActions = "suspicious_request"
+	EVENTACTIONS_SECRET_VIEW                EventActions = "secret_view"
+	EVENTACTIONS_SECRET_ROTATE              EventActions = "secret_rotate"
 	EVENTACTIONS_IMPERSONATION_STARTED      EventActions = "impersonation_started"
 	EVENTACTIONS_IMPERSONATION_ENDED        EventActions = "impersonation_ended"
 	EVENTACTIONS_FLOW_EXECUTION             EventActions = "flow_execution"
@@ -44,11 +44,11 @@ const (
 	EVENTACTIONS_SYSTEM_EXCEPTION           EventActions = "system_exception"
 	EVENTACTIONS_CONFIGURATION_ERROR        EventActions = "configuration_error"
 	EVENTACTIONS_CONFIGURATION_WARNING      EventActions = "configuration_warning"
+	EVENTACTIONS_UPDATE_AVAILABLE           EventActions = "update_available"
+	EVENTACTIONS_EMAIL_SENT                 EventActions = "email_sent"
 	EVENTACTIONS_MODEL_CREATED              EventActions = "model_created"
 	EVENTACTIONS_MODEL_UPDATED              EventActions = "model_updated"
 	EVENTACTIONS_MODEL_DELETED              EventActions = "model_deleted"
-	EVENTACTIONS_EMAIL_SENT                 EventActions = "email_sent"
-	EVENTACTIONS_UPDATE_AVAILABLE           EventActions = "update_available"
 	EVENTACTIONS_EXPORT_READY               EventActions = "export_ready"
 	EVENTACTIONS_REVIEW_INITIATED           EventActions = "review_initiated"
 	EVENTACTIONS_REVIEW_OVERDUE             EventActions = "review_overdue"
@@ -66,15 +66,15 @@ var AllowedEventActionsEnumValues = []EventActions{
 	"login",
 	"login_failed",
 	"logout",
-	"user_write",
-	"user_offboarded",
-	"suspicious_request",
-	"password_set",
-	"secret_view",
-	"secret_rotate",
-	"invitation_used",
 	"authorize_application",
 	"source_linked",
+	"user_write",
+	"user_offboarded",
+	"password_set",
+	"invitation_used",
+	"suspicious_request",
+	"secret_view",
+	"secret_rotate",
 	"impersonation_started",
 	"impersonation_ended",
 	"flow_execution",
@@ -86,11 +86,11 @@ var AllowedEventActionsEnumValues = []EventActions{
 	"system_exception",
 	"configuration_error",
 	"configuration_warning",
+	"update_available",
+	"email_sent",
 	"model_created",
 	"model_updated",
 	"model_deleted",
-	"email_sent",
-	"update_available",
 	"export_ready",
 	"review_initiated",
 	"review_overdue",

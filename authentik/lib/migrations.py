@@ -9,7 +9,7 @@ from django.db.backends.base.schema import BaseDatabaseSchemaEditor
 from authentik.events.utils import cleanse_dict, sanitize_dict
 
 if TYPE_CHECKING:
-    from authentik.events.models import EventAction
+    from authentik.events.models import EventActionType
 
 
 def fallback_names(app: str, model: str, field: str):
@@ -74,7 +74,7 @@ def progress_bar(iterable: Iterable):
 
 
 def migration_event(
-    apps: Apps, schema_editor: BaseDatabaseSchemaEditor, action: EventAction, **kwargs
+    apps: Apps, schema_editor: BaseDatabaseSchemaEditor, action: EventActionType, **kwargs
 ):
     db_alias = schema_editor.connection.alias
     Event = apps.get_model("authentik_events", "Event")

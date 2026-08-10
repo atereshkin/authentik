@@ -19,24 +19,24 @@ pub enum EventActions {
     LoginFailed,
     #[serde(rename = "logout")]
     Logout,
-    #[serde(rename = "user_write")]
-    UserWrite,
-    #[serde(rename = "user_offboarded")]
-    UserOffboarded,
-    #[serde(rename = "suspicious_request")]
-    SuspiciousRequest,
-    #[serde(rename = "password_set")]
-    PasswordSet,
-    #[serde(rename = "secret_view")]
-    SecretView,
-    #[serde(rename = "secret_rotate")]
-    SecretRotate,
-    #[serde(rename = "invitation_used")]
-    InvitationUsed,
     #[serde(rename = "authorize_application")]
     AuthorizeApplication,
     #[serde(rename = "source_linked")]
     SourceLinked,
+    #[serde(rename = "user_write")]
+    UserWrite,
+    #[serde(rename = "user_offboarded")]
+    UserOffboarded,
+    #[serde(rename = "password_set")]
+    PasswordSet,
+    #[serde(rename = "invitation_used")]
+    InvitationUsed,
+    #[serde(rename = "suspicious_request")]
+    SuspiciousRequest,
+    #[serde(rename = "secret_view")]
+    SecretView,
+    #[serde(rename = "secret_rotate")]
+    SecretRotate,
     #[serde(rename = "impersonation_started")]
     ImpersonationStarted,
     #[serde(rename = "impersonation_ended")]
@@ -59,16 +59,16 @@ pub enum EventActions {
     ConfigurationError,
     #[serde(rename = "configuration_warning")]
     ConfigurationWarning,
+    #[serde(rename = "update_available")]
+    UpdateAvailable,
+    #[serde(rename = "email_sent")]
+    EmailSent,
     #[serde(rename = "model_created")]
     ModelCreated,
     #[serde(rename = "model_updated")]
     ModelUpdated,
     #[serde(rename = "model_deleted")]
     ModelDeleted,
-    #[serde(rename = "email_sent")]
-    EmailSent,
-    #[serde(rename = "update_available")]
-    UpdateAvailable,
     #[serde(rename = "export_ready")]
     ExportReady,
     #[serde(rename = "review_initiated")]
@@ -97,15 +97,15 @@ impl std::fmt::Display for EventActions {
             Self::Login => write!(f, "login"),
             Self::LoginFailed => write!(f, "login_failed"),
             Self::Logout => write!(f, "logout"),
-            Self::UserWrite => write!(f, "user_write"),
-            Self::UserOffboarded => write!(f, "user_offboarded"),
-            Self::SuspiciousRequest => write!(f, "suspicious_request"),
-            Self::PasswordSet => write!(f, "password_set"),
-            Self::SecretView => write!(f, "secret_view"),
-            Self::SecretRotate => write!(f, "secret_rotate"),
-            Self::InvitationUsed => write!(f, "invitation_used"),
             Self::AuthorizeApplication => write!(f, "authorize_application"),
             Self::SourceLinked => write!(f, "source_linked"),
+            Self::UserWrite => write!(f, "user_write"),
+            Self::UserOffboarded => write!(f, "user_offboarded"),
+            Self::PasswordSet => write!(f, "password_set"),
+            Self::InvitationUsed => write!(f, "invitation_used"),
+            Self::SuspiciousRequest => write!(f, "suspicious_request"),
+            Self::SecretView => write!(f, "secret_view"),
+            Self::SecretRotate => write!(f, "secret_rotate"),
             Self::ImpersonationStarted => write!(f, "impersonation_started"),
             Self::ImpersonationEnded => write!(f, "impersonation_ended"),
             Self::FlowExecution => write!(f, "flow_execution"),
@@ -117,11 +117,11 @@ impl std::fmt::Display for EventActions {
             Self::SystemException => write!(f, "system_exception"),
             Self::ConfigurationError => write!(f, "configuration_error"),
             Self::ConfigurationWarning => write!(f, "configuration_warning"),
+            Self::UpdateAvailable => write!(f, "update_available"),
+            Self::EmailSent => write!(f, "email_sent"),
             Self::ModelCreated => write!(f, "model_created"),
             Self::ModelUpdated => write!(f, "model_updated"),
             Self::ModelDeleted => write!(f, "model_deleted"),
-            Self::EmailSent => write!(f, "email_sent"),
-            Self::UpdateAvailable => write!(f, "update_available"),
             Self::ExportReady => write!(f, "export_ready"),
             Self::ReviewInitiated => write!(f, "review_initiated"),
             Self::ReviewOverdue => write!(f, "review_overdue"),

@@ -14,6 +14,7 @@
 
 import { type DataExport, DataExportFromJSON } from "../models/DataExport";
 import { type Event, EventFromJSON } from "../models/Event";
+import { type EventActionChoice, EventActionChoiceFromJSON } from "../models/EventActionChoice";
 import { type EventActions } from "../models/EventActions";
 import { type EventRequest, EventRequestToJSON } from "../models/EventRequest";
 import { type EventStats, EventStatsFromJSON } from "../models/EventStats";
@@ -66,7 +67,6 @@ import {
 } from "../models/PatchedNotificationTransportRequest";
 import { type SeverityEnum } from "../models/SeverityEnum";
 import { type TransportModeEnum } from "../models/TransportModeEnum";
-import { type TypeCreate, TypeCreateFromJSON } from "../models/TypeCreate";
 import { type UsedBy, UsedByFromJSON } from "../models/UsedBy";
 import * as runtime from "../runtime";
 
@@ -316,25 +316,25 @@ export class EventsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Get all actions
+     * Get all actions, grouped by their category
      */
     async eventsEventsActionsListRaw(
         initOverrides?: RequestInit | runtime.InitOverrideFunction,
-    ): Promise<runtime.ApiResponse<Array<TypeCreate>>> {
+    ): Promise<runtime.ApiResponse<Array<EventActionChoice>>> {
         const requestOptions = await this.eventsEventsActionsListRequestOpts();
         const response = await this.request(requestOptions, initOverrides);
 
         return new runtime.JSONApiResponse(response, (jsonValue) =>
-            jsonValue.map(TypeCreateFromJSON),
+            jsonValue.map(EventActionChoiceFromJSON),
         );
     }
 
     /**
-     * Get all actions
+     * Get all actions, grouped by their category
      */
     async eventsEventsActionsList(
         initOverrides?: RequestInit | runtime.InitOverrideFunction,
-    ): Promise<Array<TypeCreate>> {
+    ): Promise<Array<EventActionChoice>> {
         const response = await this.eventsEventsActionsListRaw(initOverrides);
         return await response.value();
     }

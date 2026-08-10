@@ -171,7 +171,7 @@ class AuditMiddleware:
         # Special case for SuspiciousOperation, we have a special event action for that
         if isinstance(exception, SuspiciousOperation):
             thread = EventNewThread(
-                EventAction.SUSPICIOUS_REQUEST,
+                EventAction.SECURITY.SUSPICIOUS_REQUEST,
                 request,
                 message=str(exception),
                 exception=exception_to_dict(exception),
@@ -179,7 +179,7 @@ class AuditMiddleware:
             thread.run()
         elif not should_ignore_exception(exception):
             thread = EventNewThread(
-                EventAction.SYSTEM_EXCEPTION,
+                EventAction.SYSTEM.EXCEPTION,
                 request,
                 message=str(exception),
                 exception=exception_to_dict(exception),
@@ -205,7 +205,7 @@ class AuditMiddleware:
             return
         user = self.get_user(request)
 
-        action = EventAction.MODEL_CREATED if created else EventAction.MODEL_UPDATED
+        action = EventAction.DATA.MODEL_CREATED if created else EventAction.DATA.MODEL_UPDATED
         thread = EventNewThread(action, request, user=user, model=model_to_dict(instance))
         thread.kwargs.update(thread_kwargs or {})
         thread.run()
@@ -222,7 +222,7 @@ class AuditMiddleware:
         user = self.get_user(request)
 
         EventNewThread(
-            EventAction.MODEL_DELETED,
+            EventAction.DATA.MODEL_DELETED,
             request,
             user=user,
             model=model_to_dict(instance),
@@ -250,7 +250,7 @@ class AuditMiddleware:
         user = self.get_user(request)
 
         EventNewThread(
-            EventAction.MODEL_UPDATED,
+            EventAction.DATA.MODEL_UPDATED,
             request,
             user=user,
             model=model_to_dict(instance),

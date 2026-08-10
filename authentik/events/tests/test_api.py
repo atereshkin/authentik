@@ -110,6 +110,12 @@ class TestEventsAPI(APITestCase):
             reverse("authentik_api:event-actions"),
         )
         self.assertEqual(response.status_code, 200)
+        body = loads(response.content)
+        self.assertEqual(len(body), len(EventAction.choices))
+        login = next(item for item in body if item["value"] == EventAction.AUTHENTICATION.LOGIN)
+        self.assertEqual(login["label"], EventAction.AUTHENTICATION.LOGIN.label)
+        self.assertEqual(login["category"], EventAction.AUTHENTICATION.category)
+        self.assertEqual(login["category_label"], "Authentication")
 
     def test_notifications(self):
         """Test notifications"""

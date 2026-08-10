@@ -29,10 +29,9 @@ from rest_framework.viewsets import ModelViewSet
 
 from authentik.api.search.fields import ChoiceSearchField, JSONSearchField
 from authentik.api.validation import validate
-from authentik.core.api.object_types import TypeCreateSerializer
 from authentik.core.api.utils import ModelSerializer, PassiveSerializer
 from authentik.core.models import User
-from authentik.events.models import Event, EventAction
+from authentik.events.models import Event, EventAction, event_action_categories
 from authentik.lib.utils.reflection import ConditionalInheritance
 from authentik.lib.utils.time import timedelta_from_string, timedelta_string_validator
 
@@ -78,6 +77,15 @@ class EventTopPerUserSerializer(PassiveSerializer):
     application = DictField()
     counted_events = IntegerField()
     unique_users = IntegerField()
+
+
+class EventActionChoiceSerializer(PassiveSerializer):
+    """A single selectable event action and the category it belongs to"""
+
+    value = ChoiceField(choices=EventAction.choices)
+    label = CharField()
+    category = ChoiceField(choices=event_action_categories())
+    category_label = CharField()
 
 
 class EventsFilter(django_filters.FilterSet):
@@ -311,11 +319,19 @@ class EventViewSet(
             }
         )
 
-    @extend_schema(responses={200: TypeCreateSerializer(many=True)})
+    @extend_schema(responses={200: EventActionChoiceSerializer(many=True)})
     @action(detail=False, pagination_class=None, filter_backends=[])
     def actions(self, request: Request) -> Response:
-        """Get all actions"""
+        """Get all actions, grouped by their category"""
         data = []
-        for value, name in EventAction.choices:
-            data.append({"name": name, "description": "", "component": value, "model_name": ""})
-        return Response(TypeCreateSerializer(data, many=True).data)
+        for group in EventAction.groups():
+            for event_action in group:
+                data.append(
+                    {
+                        "value": event_action.value,
+                        "label": event_action.label,
+                        "category": group.category,
+                        "category_label": group.category_label,
+                    }
+                )
+        return Response(EventActionChoiceSerializer(data, many=True).data)

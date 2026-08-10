@@ -6,12 +6,43 @@ from django.db.models import Model
 from django.test import TestCase
 
 from authentik.core.models import default_token_key
-from authentik.events.models import default_event_duration
+from authentik.events.models import (
+    EventAction,
+    default_event_duration,
+    event_action_group,
+)
 from authentik.lib.utils.reflection import get_apps
 
 
 class TestModels(TestCase):
     """Test Models"""
+
+    def test_action_values_unique(self):
+        """Action values must be globally unique across groups — nothing enforces
+        this structurally, unlike in a single flat enum"""
+        values = EventAction.values
+        self.assertEqual(len(values), len(set(values)))
+
+    def test_action_compat_aliases(self):
+        """Flat aliases point at the grouped members"""
+        self.assertIs(EventAction.USER_WRITE, EventAction.USER.WRITE)
+        self.assertIs(EventAction.SYSTEM_EXCEPTION, EventAction.SYSTEM.EXCEPTION)
+        self.assertIs(EventAction.INVITE_USED, EventAction.USER.INVITATION_USED)
+
+    def test_action_flat_surface(self):
+        """The namespace behaves like the flat enum it replaced"""
+        self.assertEqual(EventAction("login"), EventAction.AUTHENTICATION.LOGIN)
+        self.assertIn("login", EventAction)
+        self.assertIsInstance(EventAction.AUTHENTICATION.LOGIN, EventAction)
+        with self.assertRaises(ValueError):
+            EventAction("not_an_action")
+
+    def test_event_action_group(self):
+        """Runtime custom_-prefixed actions fall back to the custom group"""
+        self.assertIs(
+            event_action_group(EventAction.AUTHENTICATION.LOGIN), EventAction.AUTHENTICATION
+        )
+        self.assertIs(event_action_group("custom_foo"), EventAction.CUSTOM)
 
 
 def model_tester_factory(test_model: type[Model]) -> Callable:

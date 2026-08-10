@@ -8060,7 +8060,7 @@ paths:
   /events/events/actions/:
     get:
       operationId: events_events_actions_list
-      description: Get all actions
+      description: Get all actions, grouped by their category
       tags:
       - events
       security:
@@ -8072,7 +8072,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/TypeCreate'
+                  $ref: '#/components/schemas/EventActionChoice'
           description: ''
         '400':
           $ref: '#/components/responses/ValidationErrorResponse'
@@ -40686,20 +40686,48 @@ components:
       - app
       - created
       - pk
+    EventActionCategories:
+      enum:
+      - authentication
+      - user
+      - security
+      - flows
+      - system
+      - data
+      - governance
+      - custom
+      type: string
+    EventActionChoice:
+      type: object
+      description: A single selectable event action and the category it belongs to
+      properties:
+        value:
+          $ref: '#/components/schemas/EventActions'
+        label:
+          type: string
+        category:
+          $ref: '#/components/schemas/EventActionCategories'
+        category_label:
+          type: string
+      required:
+      - category
+      - category_label
+      - label
+      - value
     EventActions:
       enum:
       - login
       - login_failed
       - logout
-      - user_write
-      - user_offboarded
-      - suspicious_request
-      - password_set
-      - secret_view
-      - secret_rotate
-      - invitation_used
       - authorize_application
       - source_linked
+      - user_write
+      - user_offboarded
+      - password_set
+      - invitation_used
+      - suspicious_request
+      - secret_view
+      - secret_rotate
       - impersonation_started
       - impersonation_ended
       - flow_execution
@@ -40711,11 +40739,11 @@ components:
       - system_exception
       - configuration_error
       - configuration_warning
+      - update_available
+      - email_sent
       - model_created
       - model_updated
       - model_deleted
-      - email_sent
-      - update_available
       - export_ready
       - review_initiated
       - review_overdue
